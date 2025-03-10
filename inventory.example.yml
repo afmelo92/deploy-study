@@ -1,0 +1,7 @@
+---
+all:
+  hosts:
+    droplet:
+      ansible_host: you-droplet-ip # e.g., 192.168.1.1
+      ansible_user: root
+      ansible_ssh_private_key_file: ~/.ssh/id_rsa

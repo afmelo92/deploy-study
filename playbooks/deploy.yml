@@ -1,0 +1,88 @@
+---
+- name: Configure Existing DigitalOcean Droplet
+  hosts: droplet
+  gather_facts: true
+  become: yes # Run as root (sudo)
+  tasks:
+    # Update package list
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    # Install Node.js and npm (reinstalls if needed)
+    - name: Install Node.js and npm
+      apt:
+        name: ['nodejs', 'npm']
+        state: present
+        force: yes # Ensures a fresh install
+
+    # Install pnpm globally (reinstalls if needed)
+    - name: Install PNPM
+      npm:
+        name: pnpm
+        global: yes
+        state: latest
+
+    # Install PM2 globally (reinstalls if needed)
+    - name: Install PM2
+      npm:
+        name: pm2
+        global: yes
+        state: latest
+
+    # Remove existing app directory (to start fresh)
+    - name: Remove existing app directory
+      file:
+        path: '/var/www/app'
+        state: absent
+
+    # Check if git is installed, install if not
+    - name: Check if git is installed
+      command: git --version
+      register: git_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Install git if not present
+      apt:
+        name: git
+        state: present
+      when: git_check.rc is defined and git_check.rc != 0
+
+    # Clone the GitHub repo
+    - name: Clone the GitHub repo
+      git:
+        repo: 'https://github.com/afmelo92/deploy-study.git'
+        dest: '/var/www/app'
+        version: 'master'
+        force: yes # Overwrites local changes
+
+    # Install app dependencies
+    - name: Install app dependencies
+      command: pnpm install
+      args:
+        chdir: '/var/www/app'
+
+    # Build app
+    - name: Build app
+      command: pnpm build
+      args:
+        chdir: '/var/www/app'
+
+    # Stop any existing PM2 process
+    - name: Stop existing PM2 app
+      command: pm2 delete deploy-study
+      ignore_errors: yes # Ignores if app doesn’t exist
+
+    # Start app with PM2
+    - name: Start app with PM2
+      command: pm2 start dist/index.js --name "deploy-study"
+      args:
+        chdir: '/var/www/app'
+      environment:
+        NODE_ENV: production
+
+    # Save PM2 process list
+    - name: Save PM2 process list
+      command: pm2 save
